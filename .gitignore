@@ -1,0 +1,11 @@
+# Exclude all.
+/*
+
+# Include this files.
+!/falonso.c
+!/falonso.h
+!/libfalonso.a
+!/makefile
+!/.gitignore
+
+# Exclude this files.
