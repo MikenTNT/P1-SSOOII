@@ -5,15 +5,13 @@
 
 # Compilador de C 'gcc'.
 CC = gcc
-# CFLAGS: depurador '-g', matematicas '-lm'. -m32
+# CFLAGS: depurador '-g', matematicas '-lm'.
 CFLAGS = -m32 -Wall
 
 # SOURCES: archivos fuentes de C.
 SOURCES = falonso.c libfalonso.a
 # HEADERS: archivos de cabecera de C.
 HEADERS = falonso.h
-# OBJECTS: archivos compilados a objeto para el linker.
-OBJETCS = falonso.o
 
 #----------------------------OBJETIVOS PRINCIPALES------------------------------
 
@@ -34,7 +32,7 @@ run: falonso
 
 # Objetivo para limpieza.
 clean:
-	rm -rf $(OBJETCS) falonso
+	rm -rf falonso
 
 # Objetivo para comprimir.
 tar: $(SOURCES) $(HEADERS) Makefile
