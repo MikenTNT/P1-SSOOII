@@ -20,7 +20,7 @@ all: falonso
 
 
 # Crear el archivo de ejecución falonso.
-falonso: $(SOURCES)
+falonso: $(SOURCES) $(HEADERS)
 	$(CC) $(CFLAGS) -o falonso $(SOURCES)
 
 #-------------------------------OTROS OBJETIVOS---------------------------------
@@ -37,5 +37,9 @@ clean:
 # Objetivo para comprimir.
 tar: $(SOURCES) $(HEADERS) Makefile
 	tar -cvf proyecto.tar $^
+
+# Objetivo para descomprimir.
+untar: proyecto.tar
+	tar -xvf proyecto.tar
 
 #-------------------------------------------------------------------------------
