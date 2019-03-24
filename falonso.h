@@ -59,6 +59,8 @@ void salir();
 void leerMensaje(int carril, int desp);
 void enviarMensaje(int carril, int desp);
 int puedoAvanzar(int carril, int desp);
+void mandarMensajePosicion(int carril, int desp);
+int puedoCambioCarril(int carril, int desp);
 
 
 #endif
