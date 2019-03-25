@@ -43,7 +43,7 @@ int main(int argc, char const *argv[]) {
 	int tempC, tempD;
 	int color = ROJO;
 	int carril = CARRIL_DERECHO;
-	int velo = 70;
+	int velo = 50;
 	//pid_t pidHijo = 0;
 	//int c = CARRIL_IZQUIERDO;
 
@@ -97,18 +97,18 @@ int main(int argc, char const *argv[]) {
 					pid_hijos[i] = getpid();
 					desp = i ;
 					if (i == 1) {
-						carril = 0;
+						carril = 1;
 						desp = 80;
 						color = AMARILLO;
-						velo = 80;
+						velo = 50;
 					} else if (i == 2) {
 						desp = 70;
-						carril = 0;
+						carril = 1;
 						color = VERDE;
 						velo = 10;
 					} else if (i == 3) {
 						desp = 100;
-						carril = 0;
+						carril = 1;
 						color = BLANCO;
 						velo = 90;
 					}
@@ -144,7 +144,9 @@ int main(int argc, char const *argv[]) {
 								tempC = carril;
 								tempD = desp;
 								cambio_carril(&carril, &desp, color);
-								mandarMensajePosicion(tempC,tempD);
+								printf("Carril %d Desp %d\n", tempC, tempD);
+								//sprintf(stderr,"Carril %d, Posicion %d \n", tempC, tempD);
+								mandarMensajeCambio(tempC,tempD);
 								opSemaforo(semaforo, 3, 1);
 							}
 
@@ -224,16 +226,25 @@ int puedoAvanzar(int carril, int desp)
 		if ((desp + 137) == 273) {
 			if (-1 == msgrcv(buzon, &men, sizeof(men.info), 138, 0))
 				perrorExit(ERR_GEN, "Error de puedoAvanzar");
-		} else {
-			if (msgrcv(buzon, &men, sizeof(men.info), 137 + desp + 2, 0)==-1)
-				perrorExit(ERR_GEN, "Error de puedoAvanzar");
+		 } else if(desp == 21 || desp == 97){
+		 	if (msgrcv(buzon, &men, sizeof(men.info), 137 + desp + 2, 0)==-1)
+		 		perrorExit(ERR_GEN, "Error de puedoAvanzar");
+		 }
+		else {
+			if (msgrcv(buzon, &men, sizeof(men.info), 137 + desp + 2, IPC_NOWAIT)==-1){
+				//printf("Aqui\n");
+				return 0;
+			}
+
+				//perrorExit(ERR_GEN, "Error de puedoAvanzar");
+
+			if (desp == 23 || desp == 24 || desp == 25 || desp == 99 || desp == 100 || desp == 101) {
+				opSemaforo(semaforo, 2, -1);
+			} else if (desp == 26 || desp == 102) {
+				opSemaforo(semaforo, 2, 6);
+			}
 		}
 
-		if (desp == 23 || desp == 24 || desp == 25 || desp == 99 || desp == 100 || desp == 101) {
-			opSemaforo(semaforo, 2, -1);
-		} else if (desp == 26 || desp == 102) {
-			opSemaforo(semaforo, 2, 3);
-		}
 		//fprintf(stderr,"Mensaje leido %d\n", desp + 1);
 	}
 
@@ -363,6 +374,39 @@ void mandarMensajePosicion(int carril, int desp){
 				fprintf(stderr, "Imposible enviar mensaje %ld\n", men.tipo);
 		} else {
 			men.tipo = 137 + desp;
+			sprintf(men.info, "%s", "Carta Recibida");
+			//fprintf(stderr, "Mensaje enviado %ld\n", men.tipo);
+			if (-1 == msgsnd(buzon, &men, sizeof(men.info), 0))
+				fprintf(stderr, "Imposible enviar %ld\n", men.tipo);
+		}
+	}
+}
+
+void mandarMensajeCambio(int carril, int desp){
+
+	if (carril == 0) {
+		if (desp + 1 == 1) {
+			men.tipo = 137;
+			sprintf(men.info, "%s", "Carta Recibida");
+			// fprintf(stderr, "Mensaje enviado there %ld\n", men.tipo);
+			if (-1 == msgsnd(buzon, &men, sizeof(men.info), 0))
+				fprintf(stderr, "Imposible enviar mensaje %ld\n", men.tipo);
+		} else {
+			men.tipo = desp + 1;
+			sprintf(men.info, "%s", "Carta Recibida");
+			//fprintf(stderr, "Mensaje enviado %ld\n", men.tipo);
+			if (-1 == msgsnd(buzon, &men, sizeof(men.info), 0))
+				fprintf(stderr, "Imposible enviar %ld\n", men.tipo);
+		}
+	} else {
+		if (137 + desp + 1 == 138) {
+			men.tipo = 274;
+			sprintf(men.info, "%s", "Carta Recibida");
+			//fprintf(stderr, "Mensaje enviado there %ld\n", men.tipo);
+			if (-1 == msgsnd(buzon, &men, sizeof(men.info), 0))
+				fprintf(stderr, "Imposible enviar mensaje %ld\n", men.tipo);
+		} else {
+			men.tipo = 137 + desp + 1;
 			sprintf(men.info, "%s", "Carta Recibida");
 			//fprintf(stderr, "Mensaje enviado %ld\n", men.tipo);
 			if (-1 == msgsnd(buzon, &men, sizeof(men.info), 0))
