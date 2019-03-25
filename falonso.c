@@ -40,9 +40,10 @@ int main(int argc, char const *argv[]) {
 
 	int i;
 	int desp = 0;
+	int tempC, tempD;
 	int color = ROJO;
 	int carril = CARRIL_DERECHO;
-	int velo = 700;
+	int velo = 70;
 	//pid_t pidHijo = 0;
 	//int c = CARRIL_IZQUIERDO;
 
@@ -101,7 +102,7 @@ int main(int argc, char const *argv[]) {
 						color = AMARILLO;
 						velo = 80;
 					} else if (i == 2) {
-						desp = 60;
+						desp = 70;
 						carril = 0;
 						color = VERDE;
 						velo = 10;
@@ -140,8 +141,10 @@ int main(int argc, char const *argv[]) {
 						} else {
 							if(puedoCambioCarril(carril, desp)) {
 								opSemaforo(semaforo, 3, -1);
+								tempC = carril;
+								tempD = desp;
 								cambio_carril(&carril, &desp, color);
-								mandarMensajePosicion(carril,desp);
+								mandarMensajePosicion(tempC,tempD);
 								opSemaforo(semaforo, 3, 1);
 							}
 
