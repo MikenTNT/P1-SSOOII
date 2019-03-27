@@ -21,6 +21,7 @@
 #define ERR_CAP_SIGN (unsigned char)152  /* Error captura de señal.  */
 #define ERR_CR_MEM (unsigned char)152  /* Error crear memoria compartida.  */
 
+/* Constantes de los semáforos.  */
 #define SEM_PADRE 1
 #define SEM_HIJOS 2
 #define SEM_3 3
@@ -167,6 +168,8 @@ int main(int argc, char const *argv[]) {
 			case 0:
 				pidHijo = getpid();
 				srand(pidHijo);
+
+				/* Establecemos las variables del coche.  */
 				carril = pidHijo % 2;
 				desp = (i / 2) + i;
 				velo = 1 + (rand() % 99);
@@ -179,7 +182,7 @@ int main(int argc, char const *argv[]) {
 					pMemoria->men.tipo = desp + 1;
 
 				if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, pMemoria->men.tipo, 0)) {
-					perror("Error de avanzace");
+					perror("Error de avance");
 					raise(SIGINT);
 				}
 
@@ -225,6 +228,7 @@ int main(int argc, char const *argv[]) {
 	}
 
 	if (getpid() == pidPadre) {
+		/* Esperamos a que todos los hijos estén creados.  */
 		opSemaforo(pMemoria->semaforos, SEM_PADRE, -atoi(argv[1]));
 		opSemaforo(pMemoria->semaforos, SEM_HIJOS, atoi(argv[1]));
 
@@ -290,7 +294,7 @@ int puedoAvanzar(int carril, int desp)
 		}
 		else if (desp == 19 || desp == 104) {
 			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, desp + 2, 0)) {
-				perror("Error de avanzace");
+				perror("Error de avance");
 				raise(SIGINT);
 			}
 		}
@@ -319,7 +323,7 @@ int puedoAvanzar(int carril, int desp)
 		}
 		else if (desp == 21 || desp == 97) {
 			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 137 + desp + 2, 0)) {
-				perror("Error de avanzace");
+				perror("Error de avance");
 				raise(SIGINT);
 			}
 		}
