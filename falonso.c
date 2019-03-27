@@ -57,7 +57,6 @@ struct recursosIPC {
 
 int main(int argc, char const *argv[]) {
 
-
 	/* Comprobación de los argumentos.  */
 	if (argc != 3) {
 		puts("Modo de uso, \"./falonso (numero de coches) (velocidad 0/1)\".");
@@ -159,7 +158,10 @@ int main(int argc, char const *argv[]) {
 			printf("Imposible enviar mensaje\n");
 	}
 
+
+	/* Iniciamos el circuito.  */
 	inicio_falonso(atoi(argv[2]), rIPC.semaforos, rIPC.pMemoria);
+
 
 	/* Creamos a los hijos/coches.  */
 	for (i = 0; i < NUM_HIJOS; i++) {
@@ -192,7 +194,7 @@ int main(int argc, char const *argv[]) {
 				}
 
 				/* Esperamos a que todos los hijos estén creados.  */
-				fprintf(stderr,"Carril %d Pos %d Velo %d\n",carril,desp,velo);
+				fprintf(stderr, "Carril %d Pos %d Velo %d\n", carril, desp, velo);
 				opSemaforo(rIPC.semaforos, 4, -1);
 				opSemaforo(rIPC.semaforos, 1, -1);
 
@@ -216,7 +218,7 @@ int main(int argc, char const *argv[]) {
 							tempC = carril;
 							tempD = desp;
 							cambio_carril(&carril, &desp, color);
-							mandarMensajeCambio(tempC,tempD);
+							mandarMensajeCambio(tempC, tempD);
 							opSemaforo(rIPC.semaforos, 3, 1);
 						}
 					}
@@ -274,10 +276,10 @@ int puedoAvanzar(int carril, int desp)
 		/* CARRIL DERECHO CON SUS OPCIONES Y VALORES.  */
 		if (desp == 21 || desp == 106) {
 			fprintf(stderr, "%d\n", -1);
-			opSemaforo(rIPC.semaforos,2,-1);
+			opSemaforo(rIPC.semaforos, 2, -1);
 		}
 		else if (desp == 22 || desp == 23 || desp == 107 || desp == 108) {
-			fprintf(stderr, "%d%d\n", -1,1);
+			fprintf(stderr, "%d%d\n", -1, 1);
 			opSemaforo(rIPC.semaforos, 2, 1);
 			opSemaforo(rIPC.semaforos, 2, -1);
 		}
@@ -309,7 +311,7 @@ int puedoAvanzar(int carril, int desp)
 			opSemaforo(rIPC.semaforos, 2, -1);
 		}
 		else if (desp == 24 || desp == 25 || desp == 100 || desp == 101) {
-			fprintf(stderr, "%d%d\n", -1,1);
+			fprintf(stderr, "%d%d\n", -1, 1);
 			opSemaforo(rIPC.semaforos, 2, 1);
 			opSemaforo(rIPC.semaforos, 2, -1);
 		}
@@ -692,7 +694,7 @@ case 0:
 					desp += 5;
 					velo = (rand() % 90) + 9;
 				}
-				printf("Velo %d Carril %d Color %d desp %d\n",velo,carril,color,desp);
+				printf("Velo %d Carril %d Color %d desp %d\n", velo, carril, color, desp);
 				printf("Entro aqui\n");
 
 				if (i == 1) {
