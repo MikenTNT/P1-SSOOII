@@ -21,8 +21,14 @@
 #define ERR_CAP_SIGN (unsigned char)152  /* Error captura de señal.  */
 #define ERR_CR_MEM (unsigned char)152  /* Error crear memoria compartida.  */
 
-#define NUM_HIJOS 10
-#define TAM sizeof(memoria)
+#define SEM_PADRE 1
+#define SEM_HIJOS 2
+#define SEM_3 3
+#define SEM_4 4
+
+#define NUM_HIJOS 20
+#define TAM_MEMO sizeof(memoria)
+#define TAM_MENS sizeof(pMemoria->men.info)
 
 
 /* Prototipos de función.  */
@@ -57,6 +63,7 @@ typedef struct memoriaCompartida {
 	pid_t pid_hijos[NUM_HIJOS];
 	mensaje men;
 
+	int vueltasCoches;
 	char finHijos;
 } memoria;
 
@@ -100,7 +107,7 @@ int main(int argc, char const *argv[]) {
 
 
 	/* Inicia y comprueba la creacíon de memoria compartida.  */
-	if (-1 == (idMemoria = shmget(IPC_PRIVATE, TAM, 0666 | IPC_CREAT))) {
+	if (-1 == (idMemoria = shmget(IPC_PRIVATE, TAM_MEMO, 0666 | IPC_CREAT))) {
 		perrorExit(ERR_CR_MEM, "No se ha podido crear la memoria");
 	}
 
@@ -113,9 +120,11 @@ int main(int argc, char const *argv[]) {
 	/* Inicializamos los valores de la memoria.  */
 	pMemoria->semaforos = -1;
 	pMemoria->buzon = -1;
-	sprintf(pMemoria->men.info, "Carta Recibida");
 	for (i = 0; i < NUM_HIJOS; i++)
 		pMemoria->pid_hijos[i] = -1;
+	sprintf(pMemoria->men.info, "Carta Recibida");
+	pMemoria->vueltasCoches = 0;
+	pMemoria->finHijos = 0;
 
 
 	/* Inicia y comprueba la creacíon del array de semáforos.  */
@@ -124,13 +133,6 @@ int main(int argc, char const *argv[]) {
 		raise(SIGINT);
 	}
 
-	/* Damos valor a los semáforos.  */
-	inicioSemaforo(&(pMemoria->semaforos), 1, 0);
-	inicioSemaforo(&(pMemoria->semaforos), 2, 6);
-	inicioSemaforo(&(pMemoria->semaforos), 3, 1);
-	inicioSemaforo(&(pMemoria->semaforos), 4, atoi(argv[1]));
-
-
 	/* Creación del buzon.  */
 	if (-1 == (pMemoria->buzon = msgget(IPC_PRIVATE, 0600 | IPC_CREAT))) {
 		perror("No se ha podido crear el buzón");
@@ -138,17 +140,23 @@ int main(int argc, char const *argv[]) {
 	}
 
 
-	/* Enviar Mensaje a todas las posiciones, sumando 1 para no enviar al 0.  */
+	/* Damos valor a los semáforos.  */
+	inicioSemaforo(&(pMemoria->semaforos), SEM_PADRE, 0);
+	inicioSemaforo(&(pMemoria->semaforos), SEM_HIJOS, 0);
+	inicioSemaforo(&(pMemoria->semaforos), SEM_3, 1);
+	inicioSemaforo(&(pMemoria->semaforos), SEM_4, 6);
+
+
+	/* Enviar mensaje a todas las posiciones, sumando 1 para no enviar al 0.  */
 	for (i = 0; i < 274; i++) {
 		pMemoria->men.tipo = i + 1;
-		if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), 0))
+		if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 0))
 			printf("Imposible enviar mensaje\n");
 	}
 
 	/* Iniciamos el circuito.  */
 	inicio_falonso(atoi(argv[2]), pMemoria->semaforos, (char *)pMemoria);
 
-	pMemoria->finHijos = 0;
 
 	/* Creamos a los hijos/coches.  */
 	for (i = 0; i < atoi(argv[1]); i++) {
@@ -170,8 +178,8 @@ int main(int argc, char const *argv[]) {
 				else
 					pMemoria->men.tipo = desp + 1;
 
-				if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), pMemoria->men.tipo, 0)) {
-					perror("Error de puedoAvanzar");
+				if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, pMemoria->men.tipo, 0)) {
+					perror("Error de avanzace");
 					raise(SIGINT);
 				}
 
@@ -181,9 +189,8 @@ int main(int argc, char const *argv[]) {
 				}
 
 				/* Esperamos a que todos los hijos estén creados.  */
-				// fprintf(stderr, "Carril %d Pos %d Velo %d\n", carril, desp, velo);
-				opSemaforo(pMemoria->semaforos, 4, -1);
-				opSemaforo(pMemoria->semaforos, 1, -1);
+				opSemaforo(pMemoria->semaforos, SEM_PADRE, 1);
+				opSemaforo(pMemoria->semaforos, SEM_HIJOS, -1);
 
 				while (1) {
 					if (puedoAvanzar(carril, desp)) {
@@ -193,20 +200,20 @@ int main(int argc, char const *argv[]) {
 						 * Hacemos atómica el avanzar y enviar mensaje
 						 *  a la posición anterior.
 						 */
-						opSemaforo(pMemoria->semaforos, 3, -1);
+						opSemaforo(pMemoria->semaforos, SEM_3, -1);
 						avance_coche(&carril, &desp, color);
 						/* Enviamos mensaje a la posicion que dejamos libre.  */
 						mandarMensajePosicion(carril, desp);
-						opSemaforo(pMemoria->semaforos, 3, 1);
+						opSemaforo(pMemoria->semaforos, SEM_3, 1);
 					}
 					else {
 						if (puedoCambioCarril(carril, desp)) {
-							opSemaforo(pMemoria->semaforos, 3, -1);
+							opSemaforo(pMemoria->semaforos, SEM_3, -1);
 							tempC = carril;
 							tempD = desp;
 							cambio_carril(&carril, &desp, color);
 							mandarMensajeCambio(tempC, tempD);
-							opSemaforo(pMemoria->semaforos, 3, 1);
+							opSemaforo(pMemoria->semaforos, SEM_3, 1);
 						}
 					}
 					if (pMemoria->finHijos)
@@ -218,8 +225,8 @@ int main(int argc, char const *argv[]) {
 	}
 
 	if (getpid() == pidPadre) {
-		opSemaforo(pMemoria->semaforos, 4, 0);
-		opSemaforo(pMemoria->semaforos, 1, atoi(argv[1]));
+		opSemaforo(pMemoria->semaforos, SEM_PADRE, -atoi(argv[1]));
+		opSemaforo(pMemoria->semaforos, SEM_HIJOS, atoi(argv[1]));
 
 		luz_semAforo(0, 1);
 		leerMensaje(0, 105);
@@ -232,11 +239,11 @@ int main(int argc, char const *argv[]) {
 			leerMensaje(1, 22);
 			luz_semAforo(1, 1);
 
-			opSemaforo(pMemoria->semaforos, 2, -6);
+			opSemaforo(pMemoria->semaforos, SEM_4, -6);
 
 			luz_semAforo(0, 2);
 
-			opSemaforo(pMemoria->semaforos, 2, 6);
+			opSemaforo(pMemoria->semaforos, SEM_4, 6);
 
 			enviarMensaje(0, 105);
 			enviarMensaje(1, 98);
@@ -245,9 +252,9 @@ int main(int argc, char const *argv[]) {
 			leerMensaje(0, 105);
 			leerMensaje(1, 98);
 			luz_semAforo(0, 1);
-			opSemaforo(pMemoria->semaforos, 2, -6);
+			opSemaforo(pMemoria->semaforos, SEM_4, -6);
 			luz_semAforo(1, 2);
-			opSemaforo(pMemoria->semaforos, 2, 6);
+			opSemaforo(pMemoria->semaforos, SEM_4, 6);
 			enviarMensaje(0, 20);
 			enviarMensaje(1, 22);
 			sleep(1);
@@ -267,31 +274,28 @@ int puedoAvanzar(int carril, int desp)
 	if (carril == 0) {
 		/* CARRIL DERECHO CON SUS OPCIONES Y VALORES.  */
 		if (desp == 21 || desp == 106) {
-			// fprintf(stderr, "%d\n", -1);
-			opSemaforo(pMemoria->semaforos, 2, -1);
+			opSemaforo(pMemoria->semaforos, SEM_4, -1);
 		}
 		else if (desp == 22 || desp == 23 || desp == 107 || desp == 108) {
-			// fprintf(stderr, "%d%d\n", -1, 1);
-			opSemaforo(pMemoria->semaforos, 2, 1);
-			opSemaforo(pMemoria->semaforos, 2, -1);
+			opSemaforo(pMemoria->semaforos, SEM_4, 1);
+			opSemaforo(pMemoria->semaforos, SEM_4, -1);
 		}
 		else if (desp == 24 || desp == 109) {
-			// fprintf(stderr, "%d\n", 1);
-			opSemaforo(pMemoria->semaforos, 2, 1);
+			opSemaforo(pMemoria->semaforos, SEM_4, 1);
 		}
 
 		if (desp == 136) {
-			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), 1, IPC_NOWAIT))
+			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 1, IPC_NOWAIT))
 				return 0;
 		}
 		else if (desp == 19 || desp == 104) {
-			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), desp + 2, 0)) {
-				perror("Error de puedoAvanzar");
+			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, desp + 2, 0)) {
+				perror("Error de avanzace");
 				raise(SIGINT);
 			}
 		}
 		else {
-			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), desp + 2, IPC_NOWAIT))
+			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, desp + 2, IPC_NOWAIT))
 				return 0;
 		}
 	}
@@ -299,31 +303,28 @@ int puedoAvanzar(int carril, int desp)
 		/* CARRIL IZQUIERDO CON SUS OPCIONES Y VALORES.  */
 		/* Wait y Signal del cruce.  */
 		if (desp == 23 || desp == 99) {
-			// fprintf(stderr, "%d\n", -1);
-			opSemaforo(pMemoria->semaforos, 2, -1);
+			opSemaforo(pMemoria->semaforos, SEM_4, -1);
 		}
 		else if (desp == 24 || desp == 25 || desp == 100 || desp == 101) {
-			// fprintf(stderr, "%d%d\n", -1, 1);
-			opSemaforo(pMemoria->semaforos, 2, 1);
-			opSemaforo(pMemoria->semaforos, 2, -1);
+			opSemaforo(pMemoria->semaforos, SEM_4, 1);
+			opSemaforo(pMemoria->semaforos, SEM_4, -1);
 		}
 		else if (desp == 26 || desp == 102) {
-			// fprintf(stderr, "%d\n", 1);
-			opSemaforo(pMemoria->semaforos, 2, 1);
+			opSemaforo(pMemoria->semaforos, SEM_4, 1);
 		}
 
 		if ((desp + 137) == 273) {
-			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), 138, IPC_NOWAIT))
+			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 138, IPC_NOWAIT))
 				return 0;
 		}
 		else if (desp == 21 || desp == 97) {
-			if (msgrcv(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), 137 + desp + 2, 0) == -1) {
-				perror("Error de puedoAvanzar");
+			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 137 + desp + 2, 0)) {
+				perror("Error de avanzace");
 				raise(SIGINT);
 			}
 		}
 		else {
-			if (msgrcv(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), 137 + desp + 2, IPC_NOWAIT) == -1)
+			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 137 + desp + 2, IPC_NOWAIT))
 				return 0;
 		}
 	}
@@ -336,50 +337,50 @@ int puedoCambioCarril(int carril, int desp)
 {
 	if (carril == 0) {
 		if ((desp >= 0 && desp <= 13) || (desp >= 29 && desp <= 60)) {
-			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), 137 + desp + 1, 0)) {
-				perror("Error de puedoAvanzar");
+			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 137 + desp + 1, 0)) {
+				perror("Error de mensaje de cambio de carril");
 				raise(SIGINT);
 			}
 			// +0
 		}
 		else if (desp >= 14 && desp <= 28) {
-			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), 137 + desp + 2, 0)) {
-				perror("Error de puedoAvanzar");
+			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 137 + desp + 2, 0)) {
+				perror("Error de mensaje de cambio de carril");
 				raise(SIGINT);
 			}
 			// +1
 		}
 		else if ((desp >= 61 && desp <= 62) || (desp >= 135 && desp <= 136)) {
-			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), 137 + desp, 0)) {
-				perror("Error de puedoAvanzar");
+			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 137 + desp, 0)) {
+				perror("Error de mensaje de cambio de carril");
 				raise(SIGINT);
 			}
 			// -1
 		}
 		else if ((desp >= 63 && desp <= 65) || (desp >= 131 && desp <= 134)) {
-			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), 137 + desp - 1, 0)) {
-				perror("Error de puedoAvanzar");
+			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 137 + desp - 1, 0)) {
+				perror("Error de mensaje de cambio de carril");
 				raise(SIGINT);
 			}
 			//-2
 		}
 		else if ((desp >= 66 && desp <= 67) || (desp == 130)) {
-			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), 137 + desp - 2, 0)) {
-				perror("Error de puedoAvanzar");
+			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 137 + desp - 2, 0)) {
+				perror("Error de mensaje de cambio de carril");
 				raise(SIGINT);
 			}
 			//-3
 		}
 		else if (desp == 68) {
-			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), 137 + desp - 3, 0)) {
-				perror("Error de puedoAvanzar");
+			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 137 + desp - 3, 0)) {
+				perror("Error de mensaje de cambio de carril");
 				raise(SIGINT);
 			}
 			//-4
 		}
 		else if (desp >= 69 && desp <= 129) {
-			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), 137 + desp - 4, 0)) {
-				perror("Error de puedoAvanzar");
+			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 137 + desp - 4, 0)) {
+				perror("Error de mensaje de cambio de carril");
 				raise(SIGINT);
 			}
 			//-5
@@ -387,57 +388,57 @@ int puedoCambioCarril(int carril, int desp)
 	}
 	else {
 		if ((desp >= 0 && desp <= 15) || (desp >= 29 && desp <= 58)) {
-			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), desp + 1, 0)) {
-				perror("Error de puedoAvanzar");
+			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, desp + 1, 0)) {
+				perror("Error de mensaje de cambio de carril");
 				raise(SIGINT);
 			}
 			// 0
 		}
 		else if (desp >= 16 && desp <= 28) {
-			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), desp , 0)) {
-				perror("Error de puedoAvanzar");
+			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, desp , 0)) {
+				perror("Error de mensaje de cambio de carril");
 				raise(SIGINT);
 			}
 			// -1
 		}
 		else if (desp >= 59 && desp <= 60) {
-			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), desp + 2, 0)) {
-				perror("Error de puedoAvanzar");
+			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, desp + 2, 0)) {
+				perror("Error de mensaje de cambio de carril");
 				raise(SIGINT);
 			}
 			// +1
 		}
 		else if ((desp >= 61 && desp <= 62) || (desp >= 129 && desp <= 133)) {
-			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), desp + 3, 0)) {
-				perror("Error de puedoAvanzar");
+			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, desp + 3, 0)) {
+				perror("Error de mensaje de cambio de carril");
 				raise(SIGINT);
 			}
 			// +2
 		}
 		else if (desp >= 127 && desp <= 128) {
-			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), desp + 4, 0)) {
-				perror("Error de puedoAvanzar");
+			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, desp + 4, 0)) {
+				perror("Error de mensaje de cambio de carril");
 				raise(SIGINT);
 			}
 			// +3
 		}
 		else if ((desp >= 63 && desp <= 64) || (desp == 126)) {
-			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), desp + 5, 0)) {
-				perror("Error de puedoAvanzar");
+			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, desp + 5, 0)) {
+				perror("Error de mensaje de cambio de carril");
 				raise(SIGINT);
 			}
 			// +4
 		}
 		else if (desp >= 65 && desp <= 125) {
-			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), desp + 6, 0)) {
-				perror("Error de puedoAvanzar");
+			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, desp + 6, 0)) {
+				perror("Error de mensaje de cambio de carril");
 				raise(SIGINT);
 			}
 			// +5
 		}
 		else if (desp >= 134 && desp <= 136) {
-			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), 137, 0)) {
-				perror("Error de puedoAvanzar");
+			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 137, 0)) {
+				perror("Error de mensaje de cambio de carril");
 				raise(SIGINT);
 			}
 			// 136
@@ -451,14 +452,14 @@ int puedoCambioCarril(int carril, int desp)
 void leerMensaje(int carril, int desp)
 {
 	if (carril == 0) {
-		if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), desp + 1, 0)) {
-			perror("Error de puedoAvanzar");
+		if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, desp + 1, 0)) {
+			perror("Error al leer mensaje");
 			raise(SIGINT);
 		}
 	}
 	else {
-		if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), 137 + desp + 1, 0)) {
-			perror("Error de puedoAvanzar");
+		if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 137 + desp + 1, 0)) {
+			perror("Error al leer mensaje");
 			raise(SIGINT);
 		}
 	}
@@ -469,15 +470,15 @@ void enviarMensaje(int carril, int desp)
 {
 	if (carril == 0) {
 		pMemoria->men.tipo = desp + 1;
-		if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), 0)) {
-			perror("Imposible enviar mensaje");
+		if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 0)) {
+			perror("Error al enviar mensaje");
 			raise(SIGINT);
 		}
 	}
 	else {
 		pMemoria->men.tipo = 137 + desp + 1;
-		if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), 0)) {
-			perror("Imposible enviar mensaje");
+		if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 0)) {
+			perror("Error al enviar mensaje");
 			raise(SIGINT);
 		}
 	}
@@ -489,15 +490,15 @@ void mandarMensajePosicion(int carril, int desp)
 	if (carril == 0) {
 		if (desp + 1 == 1) {
 			pMemoria->men.tipo = 137;
-			if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), 0)) {
-				perror("Imposible enviar mensaje");
+			if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 0)) {
+				perror("Error al enviar mensaje");
 				raise(SIGINT);
 			}
 		}
 		else {
 			pMemoria->men.tipo = desp;
-			if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), 0)) {
-				perror("Imposible enviar mensaje");
+			if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 0)) {
+				perror("Error al enviar mensaje");
 				raise(SIGINT);
 			}
 		}
@@ -505,15 +506,15 @@ void mandarMensajePosicion(int carril, int desp)
 	else {
 		if (137 + desp + 1 == 138) {
 			pMemoria->men.tipo = 274;
-			if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), 0)) {
-				perror("Imposible enviar mensaje");
+			if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 0)) {
+				perror("Error al enviar mensaje");
 				raise(SIGINT);
 			}
 		}
 		else {
 			pMemoria->men.tipo = 137 + desp;
-			if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), 0)) {
-				perror("Imposible enviar mensaje");
+			if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 0)) {
+				perror("Error al enviar mensaje");
 				raise(SIGINT);
 			}
 		}
@@ -526,15 +527,15 @@ void mandarMensajeCambio(int carril, int desp)
 	if (carril == 0) {
 		if (desp + 1 == 1) {
 			pMemoria->men.tipo = 137;
-			if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), 0)) {
-				perror("Imposible enviar mensaje");
+			if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 0)) {
+				perror("Error al enviar mensaje");
 				raise(SIGINT);
 			}
 		}
 		else {
 			pMemoria->men.tipo = desp + 1;
-			if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), 0)) {
-				perror("Imposible enviar mensaje");
+			if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 0)) {
+				perror("Error al enviar mensaje");
 				raise(SIGINT);
 			}
 		}
@@ -542,15 +543,15 @@ void mandarMensajeCambio(int carril, int desp)
 	else {
 		if (137 + desp + 1 == 138) {
 			pMemoria->men.tipo = 274;
-			if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), 0)) {
-				perror("Imposible enviar mensaje");
+			if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 0)) {
+				perror("Error al enviar mensaje");
 				raise(SIGINT);
 			}
 		}
 		else {
 			pMemoria->men.tipo = 137 + desp + 1;
-			if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), sizeof(pMemoria->men.info), 0)) {
-				perror("Imposible enviar mensaje");
+			if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 0)) {
+				perror("Error al enviar mensaje");
 				raise(SIGINT);
 			}
 		}
@@ -570,7 +571,7 @@ void inicioSemaforo(int *semaforo, int nSemaforo, int val)
 
 	semf.val = val;
 	if (-1 == semctl(*semaforo, nSemaforo, SETVAL, semf)) {
-		perror("No se ha podido asignar");
+		perror("No se ha podido establecer el valor del semáforo");
 		raise(SIGINT);
 	}
 }
@@ -613,7 +614,7 @@ void manejadora(int seNial)
 	/* @TODO wait for process finish.  ---------------------------------------*/
 
 
-	fin_falonso(&i);
+	fin_falonso(&(pMemoria->vueltasCoches));
 
 
 	/* Eliminamos los recursos IPC.  */
@@ -656,6 +657,7 @@ void perrorExit(int code, char *msg)
 	exit(code);
 }
 
+
 /*----------------------------------------------------------------------------*/
 
 // while(1) {
@@ -676,92 +678,5 @@ void perrorExit(int code, char *msg)
 // 	enviarMensaje(V);
 // 	alarm();
 // }
-
-/*----------------------------------------------------------------------------*/
-
-/*
-case 0:
-
-				desp = i ;
-
-				if (i < 10) {
-					carril = 0;
-					color = rand() % 8;
-					if (color == 4) {
-						color += 1;
-					}
-					desp = rand() % 137;
-					velo = (rand() % 90) + 9;
-				}
-				else {
-					if (i == 10) {
-						desp = 0;
-					}
-					carril = 1;
-					color = rand() % 8;
-					if (color == 4) {
-						color += 1;
-					}
-					desp += 5;
-					velo = (rand() % 90) + 9;
-				}
-				printf("Velo %d Carril %d Color %d desp %d\n", velo, carril, color, desp);
-				printf("Entro aqui\n");
-
-				if (i == 1) {
-					carril = 0;
-					desp = 20;
-					color = AMARILLO;
-					velo = 60;
-				}
-				else if (i == 2) {
-					desp = 70;
-					carril = 0;
-					color = VERDE;
-					velo = 10;
-				}
-				else if (i == 3) {
-					desp = 100;
-					carril = 0;
-					color = BLANCO;
-					velo = 60;
-				}
-				else if (i == 4) {
-					carril = 0;
-					desp = 80;
-					color = AMARILLO;
-					velo = 50;
-				}
-				else if (i == 5) {
-					desp = 70;
-					carril = 1;
-					color = VERDE;
-					velo = 15;
-				}
-				else if (i == 6) {
-					desp = 125;
-					carril = 1;
-					color = BLANCO;
-					velo = 93;
-				}
-				else if (i == 7) {
-					carril = 1;
-					desp = 10;
-					color = AMARILLO;
-					velo = 55;
-				}
-				else if (i == 8) {
-					desp = 28;
-					carril = 1;
-					color = VERDE;
-					velo = 20;
-				}
-				else if (i == 9) {
-					desp = 37;
-					carril = 1;
-					color = BLANCO;
-					velo = 90;
-				}
-*/
 
 /*----------------------------------------------------------------------------*/
