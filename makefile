@@ -28,7 +28,7 @@ falonso: $(SOURCES) $(HEADERS)
 # Ejecutar el programa.
 run: falonso
 	clear
-	./falonso
+	./falonso 7 1
 
 # Objetivo para limpieza.
 clean:
