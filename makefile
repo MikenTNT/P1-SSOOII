@@ -32,7 +32,7 @@ run: falonso
 
 # Objetivo para limpieza.
 clean:
-	rm -rf falonso
+	rm -rf falonso .vscode proyecto.tar
 
 # Objetivo para comprimir.
 tar: $(SOURCES) $(HEADERS) Makefile
