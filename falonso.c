@@ -27,7 +27,7 @@
 #define SEM_3 3
 #define SEM_4 4
 
-#define NUM_HIJOS 20
+#define NUM_HIJOS 25
 #define TAM_MEMO sizeof(memoria)
 #define TAM_MENS sizeof(pMemoria->men.info)
 
@@ -36,7 +36,8 @@
 void inicioSemaforo(int *semaforo, int nSemaforo, int val);
 void opSemaforo(int semaforos, int nSemaforo, int nSignal);
 void perrorExit(int code, char *msg);
-void manejadora(int seNial);
+void finPadre(int seNial);
+void finHijos(int seNial);
 
 void leerMensaje(int carril, int desp);
 void enviarMensaje(int carril, int desp);
@@ -68,7 +69,6 @@ typedef struct memoriaCompartida {
 	mensaje men;
 
 	int vueltasCoches;
-	char finHijos;
 } memoria;
 
 
@@ -94,12 +94,8 @@ int main(int argc, char const *argv[]) {
 	}
 
 
-	/* Comprobación de la captura de la señal CTLR + C.  */
-	if (signal(SIGINT, manejadora) == SIG_ERR)
-		perrorExit(ERR_CAP_SIGN, "No se puede capturar la señal");
-
-
 	/* Variables de la función main().  */
+	struct sigaction parada;
 	int i;  /* Variable de iteración.  */
 	int carril;  /* Carril del coche.  */
 	int desp;  /* Posición del coche.  */
@@ -128,7 +124,6 @@ int main(int argc, char const *argv[]) {
 		pMemoria->pid_hijos[i] = -1;
 	sprintf(pMemoria->men.info, "Carta Recibida");
 	pMemoria->vueltasCoches = 0;
-	pMemoria->finHijos = 0;
 
 
 	/* Inicia y comprueba la creacíon del array de semáforos.  */
@@ -169,10 +164,15 @@ int main(int argc, char const *argv[]) {
 				perror("Error al crear a los hijos");
 				raise(SIGINT);
 			case 0:
+				parada.sa_handler = &finPadre;
+				parada.sa_flags = SA_RESTART;
+				sigfillset(&parada.sa_mask);
+
+				/* Comprobación de la captura de la señal SIGTERM  */
+				if(-1 == sigaction(SIGUSR1, &parada, NULL)) return -1;
+
 				pidHijo = getpid();
 				srand(pidHijo);
-				if (signal(SIGINT, manejadora) == SIG_ERR)
-					perrorExit(ERR_CAP_SIGN, "No se puede capturar la señal");
 
 				/* Establecemos las variables del coche.  */
 				carril = pidHijo % 2;
@@ -209,39 +209,47 @@ int main(int argc, char const *argv[]) {
 						 *  a la posición anterior.
 						 */
 						opSemaforo(pMemoria->semaforos, SEM_3, -1);
+
 						avance_coche(&carril, &desp, color);
 						/* Enviamos mensaje a la posicion que dejamos libre.  */
 						mandarMensajePosicion(carril, desp);
-						opSemaforo(pMemoria->semaforos, SEM_3, 1);
+
 						if (((carril == 0) && (desp == 133)) || ((carril == 1) && (desp == 131)))
 							(pMemoria->vueltasCoches)++;
+
+						opSemaforo(pMemoria->semaforos, SEM_3, 1);
 					}
 					else {
 						if (puedoCambioCarril(carril, desp, color)) {
 							opSemaforo(pMemoria->semaforos, SEM_3, -1);
+
 							tempC = carril;
 							tempD = desp;
 							cambio_carril(&carril, &desp, color);
 							mandarMensajeCambio(tempC, tempD);
+
+							if (((carril == 0) && (desp == 133)) || ((carril == 1) && (desp == 131)))
+								(pMemoria->vueltasCoches)++;
+
 							opSemaforo(pMemoria->semaforos, SEM_3, 1);
 						}
 						else {
 							if (esperarParaAvance(carril,desp)) {
 								velocidad(velo, carril, desp);
+
 								opSemaforo(pMemoria->semaforos, SEM_3, -1);
+
 								avance_coche(&carril, &desp, color);
 								/* Enviamos mensaje a la posicion que dejamos libre.  */
 								mandarMensajePosicion(carril, desp);
+
+								if (((carril == 0) && (desp == 133)) || ((carril == 1) && (desp == 131)))
+									(pMemoria->vueltasCoches)++;
+
 								opSemaforo(pMemoria->semaforos, SEM_3, 1);
 							}
 						}
-
-						if (((carril == 0) && (desp == 133)) || ((carril == 1) && (desp == 131)))
-							(pMemoria->vueltasCoches)++;
 					}
-
-					if (pMemoria->finHijos)
-						break;
 				}
 
 				exit(0);
@@ -249,6 +257,13 @@ int main(int argc, char const *argv[]) {
 	}
 
 	if (getpid() == pidPadre) {
+		parada.sa_handler = &finPadre;
+		parada.sa_flags = SA_RESTART;
+		sigfillset(&parada.sa_mask);
+
+		/* Comprobación de la captura de la señal SIGTERM  */
+		if(-1 == sigaction(SIGINT, &parada, NULL)) return -1;
+
 		/* Esperamos a que todos los hijos estén creados.  */
 		opSemaforo(pMemoria->semaforos, SEM_PADRE, -atoi(argv[1]));
 		opSemaforo(pMemoria->semaforos, SEM_HIJOS, atoi(argv[1]));
@@ -766,24 +781,22 @@ void opSemaforo(int semaforo, int nSemaforo, int nSignal)
 
 
 /* Función de captura de la señal CTRL + C.  */
-void manejadora(int seNial)
+void finPadre(int seNial)
 {
 	/* Ignoramos las nuevas señales CTRL + C.  */
 	signal(SIGINT, SIG_IGN);
-	pMemoria->finHijos = 1;
 
 
 	/* Eliminamos los hijos.  */
 	int i;
 	for (i = 0; i < NUM_HIJOS; i++) {
-		kill(pMemoria->pid_hijos[i], SIGKILL);
-		if (pMemoria->pid_hijos[i] != -1)
+		if (pMemoria->pid_hijos[i] != -1) {
+			kill(pMemoria->pid_hijos[i], SIGUSR1);
 			wait(0);
+		}
 	}
 
-	/* @TODO wait for process finish.  ---------------------------------------*/
-
-	//fin_falonso(&(pMemoria->vueltasCoches));
+	fin_falonso(&(pMemoria->vueltasCoches));
 
 
 	/* Eliminamos los recursos IPC.  */
@@ -809,9 +822,15 @@ void manejadora(int seNial)
 
 
 	/* Activamos de nuevo las señales CTRL + C.  */
-	signal(SIGINT, manejadora);
+	signal(SIGINT, finPadre);
 
 
+	exit(0);
+}
+
+
+void finHijos(int seNial)
+{
 	exit(0);
 }
 
