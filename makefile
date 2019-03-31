@@ -11,30 +11,30 @@ CFLAGS = -m32 -Wall
 # Nombre del archivo a principal.
 MAIN = falonso
 # SOURCES: archivos fuentes de C.
-SOURCES = $(main).c libfalonso.a
+SOURCES = $(MAIN).c libfalonso.a
 # HEADERS: archivos de cabecera de C.
-HEADERS = $(main).h
+HEADERS = $(MAIN).h
 
 #----------------------------OBJETIVOS PRINCIPALES------------------------------
 
 # Objetivos a ejecutar con el comando make.
-all: $(main)
+all: $(MAIN)
 
 
 # Crear el archivo de ejecución falonso.
-$(main): $(SOURCES) $(HEADERS)
-	$(CC) $(CFLAGS) -o $(main) $(SOURCES)
+$(MAIN): $(SOURCES) $(HEADERS)
+	$(CC) $(CFLAGS) -o $(MAIN) $(SOURCES)
 
 #-------------------------------OTROS OBJETIVOS---------------------------------
 
 # Ejecutar el programa.
-run: $(main)
+run: $(MAIN)
 	clear
-	./$(main) 7 1
+	./$(MAIN) 7 1
 
 # Objetivo para limpieza.
 clean:
-	rm -rf $(main) .vscode proyecto.tar
+	rm -rf $(MAIN) .vscode proyecto.tar
 
 # Objetivo para comprimir.
 tar: $(SOURCES) $(HEADERS) Makefile
