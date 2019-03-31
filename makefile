@@ -1,5 +1,5 @@
-# MAKEFILE DE PROGRAMA C
-# COPYRIGHT Miguel Sanchez Gonzalez JAN-2019.
+# MAKEFILE DE PROYECTO C
+# Autor: MikenTNT  31-MAR-2019.
 
 #----------------------------------VARIABLES------------------------------------
 
@@ -8,31 +8,33 @@ CC = gcc
 # CFLAGS: depurador '-g', matematicas '-lm'.
 CFLAGS = -m32 -Wall
 
+# Nombre del archivo a principal.
+MAIN = falonso
 # SOURCES: archivos fuentes de C.
-SOURCES = falonso.c libfalonso.a
+SOURCES = $(main).c libfalonso.a
 # HEADERS: archivos de cabecera de C.
-HEADERS = falonso.h
+HEADERS = $(main).h
 
 #----------------------------OBJETIVOS PRINCIPALES------------------------------
 
 # Objetivos a ejecutar con el comando make.
-all: falonso
+all: $(main)
 
 
 # Crear el archivo de ejecución falonso.
-falonso: $(SOURCES) $(HEADERS)
-	$(CC) $(CFLAGS) -o falonso $(SOURCES)
+$(main): $(SOURCES) $(HEADERS)
+	$(CC) $(CFLAGS) -o $(main) $(SOURCES)
 
 #-------------------------------OTROS OBJETIVOS---------------------------------
 
 # Ejecutar el programa.
-run: falonso
+run: $(main)
 	clear
-	./falonso 7 1
+	./$(main) 7 1
 
 # Objetivo para limpieza.
 clean:
-	rm -rf falonso .vscode proyecto.tar
+	rm -rf $(main) .vscode proyecto.tar
 
 # Objetivo para comprimir.
 tar: $(SOURCES) $(HEADERS) Makefile
