@@ -77,8 +77,9 @@ typedef struct memoriaCompartida {
 
 
 /* Variables globales.  */
-int idMemoria = -1;
-memoria *pMemoria = NULL;
+int idMemoria = -1;  /* ID de la memoria.  */
+memoria *pMemoria = NULL;  /* Puntero de la memoria.  */
+
 
 
 int main(int argc, char const *argv[]) {
@@ -108,6 +109,14 @@ int main(int argc, char const *argv[]) {
 	int tempC, tempD;
 	pid_t pidPadre = getpid();  /* PID del padre.  */
 	pid_t pidHijo;  /* PID del hijo.  */
+
+
+	parada.sa_handler = &finPadre;
+	parada.sa_flags = SA_RESTART;
+	sigfillset(&parada.sa_mask);
+
+	/* Comprobación de la captura de la señal SIGTERM  */
+	if (-1 == sigaction(SIGINT, &parada, NULL)) return -1;
 
 
 	/* Inicia y comprueba la creacíon de memoria compartida.  */
@@ -168,7 +177,7 @@ int main(int argc, char const *argv[]) {
 				perror("Error al crear a los hijos");
 				raise(SIGINT);
 			case 0:
-				parada.sa_handler = &finPadre;
+				parada.sa_handler = &finHijos;
 				parada.sa_flags = SA_RESTART;
 				sigfillset(&parada.sa_mask);
 
@@ -180,7 +189,7 @@ int main(int argc, char const *argv[]) {
 
 				/* Establecemos las variables del coche.  */
 				carril = pidHijo % 2;
-				desp = (i / 2) ;
+				desp = (i / 2);
 				velo = 1 + (rand() % 99);
 				if (4 == (color = pidHijo % 8))
 					color ++;
@@ -232,9 +241,6 @@ int main(int argc, char const *argv[]) {
 							cambio_carril(&carril, &desp, color);
 							mandarMensajeCambio(tempC, tempD);
 
-							if (((carril == 0) && (desp == 133)) || ((carril == 1) && (desp == 131)))
-								(pMemoria->vueltasCoches)++;
-
 							opSemaforo(pMemoria->semaforos, SEM_3, 1);
 						}
 						else {
@@ -261,20 +267,13 @@ int main(int argc, char const *argv[]) {
 	}
 
 	if (getpid() == pidPadre) {
-		parada.sa_handler = &finPadre;
-		parada.sa_flags = SA_RESTART;
-		sigfillset(&parada.sa_mask);
-
-		/* Comprobación de la captura de la señal SIGTERM  */
-		if (-1 == sigaction(SIGINT, &parada, NULL)) return -1;
-
 		/* Esperamos a que todos los hijos estén creados.  */
 		opSemaforo(pMemoria->semaforos, SEM_PADRE, -atoi(argv[1]));
 		opSemaforo(pMemoria->semaforos, SEM_HIJOS, atoi(argv[1]));
 
 		luz_semAforo(0, 1);
 		leerMensaje(0, 105);
-		leerMensaje(1, 97);
+		leerMensaje(1, 98);
 		if (leerHorizontalCruce()) {
 			luz_semAforo(1, 2);
 		}
@@ -290,11 +289,11 @@ int main(int argc, char const *argv[]) {
 				luz_semAforo(0,2);
 			}
 			enviarMensaje(0,105);
-			enviarMensaje(1,97);
+			enviarMensaje(1,98);
 			sleep(1);
 
 			leerMensaje(0,105);
-			leerMensaje(1,97);
+			leerMensaje(1,98);
 			if (leerHorizontalCruce()) {
 				luz_semAforo(0,3);
 			}
@@ -310,6 +309,7 @@ int main(int argc, char const *argv[]) {
 
 		raise(SIGINT);
 	}
+
 
 	exit(0);
 
@@ -341,7 +341,7 @@ int puedoAvanzar(int carril, int desp)
 			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 138, IPC_NOWAIT))
 				return 0;
 		}
-		else if (desp == 21 || desp == 96) {
+		else if (desp == 21 || desp == 97) {
 			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 137 + desp + 2, 0)) {
 				perror("Error de avance");
 				raise(SIGINT);
@@ -365,15 +365,6 @@ int puedoCambioCarril(int carril, int desp, int color)
 			// +0
 		}
 		else if (desp >= 14 && desp <= 28) {
-			if (desp == 24) {
-				if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 21, IPC_NOWAIT))
-					return 0;
-				pMemoria->men.tipo = 21;
-				if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 0)) {
-					perror("Error al enviar mensaje");
-					raise(SIGINT);
-				}
-			}
 			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 137 + desp + 2, IPC_NOWAIT))
 				return 0;
 			// +1
@@ -399,20 +390,6 @@ int puedoCambioCarril(int carril, int desp, int color)
 			//-4
 		}
 		else if (desp >= 69 && desp <= 129) {
-			if (desp == 104 || desp == 103 || desp == 102 || desp == 101) {
-				//Control para que no se salten el semaforo
-				if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 106, IPC_NOWAIT)) {
-					// perror("Error de mensaje de cambio de carril");
-					// raise(SIGINT);
-					return 0;
-				}
-				pMemoria->men.tipo = 106;
-				if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 0)) {
-					perror("Error al enviar mensaje");
-					raise(SIGINT);
-				}
-			}
-
 			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 137 + desp - 4, IPC_NOWAIT))
 				return 0;
 			//-5
@@ -425,17 +402,6 @@ int puedoCambioCarril(int carril, int desp, int color)
 			// 0
 		}
 		else if (desp >= 16 && desp <= 28) {
-			if (desp == 22 || desp == 21) {
-				//NO saltarse el semaforo
-				if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 23, IPC_NOWAIT))
-					return 0;
-
-				pMemoria->men.tipo = 23;
-				if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 0)) {
-					perror("Error al enviar mensaje");
-					raise(SIGINT);
-				}
-			}
 			if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, desp , IPC_NOWAIT))
 				return 0;
 			// -1
@@ -620,137 +586,6 @@ void mandarMensajeCambio(int carril, int desp)
 			}
 		}
 	}
-}
-
-
-int verticalVacio()
-{
-	if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 22, 0)) {
-		perror("Error al leer mensaje");
-		raise(SIGINT);
-	}
-	pMemoria->men.tipo = 22;
-	if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 0)) {
-		perror("Error al enviar mensaje");
-		raise(SIGINT);
-	}
-
-	if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 23, 0)) {
-		perror("Error al leer mensaje");
-		raise(SIGINT);
-	}
-	pMemoria->men.tipo = 23;
-	if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 0)) {
-		perror("Error al enviar mensaje");
-		raise(SIGINT);
-	}
-
-	if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 24, 0)) {
-		perror("Error al leer mensaje");
-		raise(SIGINT);
-	}
-	pMemoria->men.tipo = 24;
-	if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 0)) {
-		perror("Error al enviar mensaje");
-		raise(SIGINT);
-	}
-
-	if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 137 + 24, 0)) {
-		perror("Error al leer mensaje");
-		raise(SIGINT);
-	}
-	pMemoria->men.tipo = 137 + 24;
-	if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 0)) {
-		perror("Error al enviar mensaje");
-		raise(SIGINT);
-	}
-
-	if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 137 + 25, 0)) {
-		perror("Error al leer mensaje");
-		raise(SIGINT);
-	}
-	pMemoria->men.tipo = 137 + 25;
-	if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 0)) {
-		perror("Error al enviar mensaje");
-		raise(SIGINT);
-	}
-
-	if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 137 + 26, 0)) {
-		perror("Error al leer mensaje");
-		raise(SIGINT);
-	}
-	pMemoria->men.tipo = 137 + 26;
-	if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 0)) {
-		perror("Error al enviar mensaje");
-		raise(SIGINT);
-	}
-
-	return 1;
-}
-
-
-int horizontalVacio()
-{
-	if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 107, 0)) {
-		perror("Error al leer mensaje");
-		raise(SIGINT);
-	}
-	pMemoria->men.tipo = 107;
-	if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 0)) {
-		perror("Error al enviar mensaje");
-		raise(SIGINT);
-	}
-
-	if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 108, 0)) {
-		perror("Error al leer mensaje");
-		raise(SIGINT);
-	}
-	pMemoria->men.tipo = 108;
-	if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 0)) {
-		perror("Error al enviar mensaje");
-		raise(SIGINT);
-	}
-
-	if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 109, 0)) {
-		perror("Error al leer mensaje");
-		raise(SIGINT);
-	}
-	pMemoria->men.tipo = 109;
-	if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 0)) {
-		perror("Error al enviar mensaje");
-		raise(SIGINT);
-	}
-
-	if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 137 + 100, 0)) {
-		perror("Error al leer mensaje");
-		raise(SIGINT);
-	}
-	pMemoria->men.tipo = 137 + 100;
-	if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 0)) {
-		perror("Error al enviar mensaje");
-		raise(SIGINT);
-	}
-
-	if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 137 + 101, 0)) {
-		perror("Error al leer mensaje");
-		raise(SIGINT);
-	}
-	pMemoria->men.tipo = 137 + 101;
-	if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 0)) {
-		perror("Error al enviar mensaje");
-		raise(SIGINT);
-	}
-
-	if (-1 == msgrcv(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 137 + 102, 0)) {
-		perror("Error al leer mensaje");
-		raise(SIGINT);
-	}
-	pMemoria->men.tipo = 137 + 102;
-	if (-1 == msgsnd(pMemoria->buzon, &(pMemoria->men), TAM_MENS, 0)) {
-		perror("Error al enviar mensaje");
-		raise(SIGINT);
-	}
-	return 1;
 }
 
 
