@@ -300,16 +300,18 @@ void hijo(int numHijo)
 
 
 	/* Configuramos el mensaje de la posición.  */
-	if (carril == CARRIL_DERECHO)
+	if (carril == CARRIL_DERECHO) {
 		if (!leerMensajeNW(desp)) {
 			perror("Error de reserva de posición");
 			raise(SIGINT);
 		}
-	else if (carril == CARRIL_IZQUIERDO)
+	}
+	else if (carril == CARRIL_IZQUIERDO) {
 		if (!leerMensajeNW(137 + desp)) {
 			perror("Error de reserva de posición");
 			raise(SIGINT);
 		}
+	}
 
 	/* Iniciamos el coche.  */
 	if (-1 == inicio_coche(&carril, &desp, color)) {
