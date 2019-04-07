@@ -21,10 +21,10 @@
 #define ERR_CR_MEM (unsigned char)153  /* Error crear memoria compartida.  */
 
 /* Constantes de los semáforos.  */
-#define SEM_PADRE 1
-#define SEM_HIJOS 2
-#define SEM_SYNC 3
-#define SEM_MENS 4
+#define SEM_PADRE 1  /* Semáforo asignado al padre.  */
+#define SEM_HIJOS 2  /* Semáforo asignado a los hijos.  */
+#define SEM_ATOM 3  /* Semáforo para partes atómicas.  */
+#define SEM_MENS 4  /* Semáforo dedicado a los mensajes.  */
 
 /* Número máximo de hijos.  */
 #define NUM_HIJOS 25
@@ -52,6 +52,7 @@ int leerMensajeNW(long tipo);
 /* Funciones de las manejadoras.  */
 void finPadre(int seNial);
 void finHijos(int seNial);
+void perrorRaise(char * sError);
 
 
 /* Definicion del tipo de mensaje, para el buzón.  */
@@ -62,11 +63,11 @@ typedef struct tipo_mensaje {
 
 /* Definición de la memoria compartida.  */
 typedef struct memoriaCompartida {
-	char cDer[137];  /* 0-136 */
-	char cIzq[137];  /* 137-273 */
-	char semH;  /* 274 */
-	char semV;  /* 275 */
-	char reservado[25];  /* 276-300 */
+	const char cDer[137];  /* 0-136 */
+	const char cIzq[137];  /* 137-273 */
+	const char semH;  /* 274 */
+	const char semV;  /* 275 */
+	const char reservado[25];  /* 276-300 */
 
 	int semaforo;
 	int buzon;
@@ -82,28 +83,30 @@ memoria *pMemoria = NULL;  /* Puntero de la memoria.  */
 
 
 
-int main(int argc, char const *argv[]) {
+int main(int argc, const char *argv[]) {
+
+	const int num_coches = atoi(argv[1]);  /* Número de hijos.  */
+	const int vel_coches = atoi(argv[2]);  /* Velocidad de los coches.  */
 
 	/* Comprobación de los argumentos.  */
 	if (argc != 3) {
 		puts("Modo de uso, \"./falonso (numero de coches) (velocidad 0/1)\".");
 		exit(ERR_ARGS);
 	}
-	else if ((atoi(argv[2]) != 0) && (atoi(argv[2]) != 1)) {
-		puts("Velocidad de coches 1(normal) o 0(rápida).");
+	else if ((num_coches <= 0) && (num_coches > NUM_HIJOS)) {
+		printf("Número de coches erróneo (max. %d).", NUM_HIJOS);
 		exit(ERR_ARGS);
 	}
-	else if (atoi(argv[1]) <= 0) {
-		puts("Número de coches erróneo.");
+	else if ((vel_coches != 0) && (vel_coches != 1)) {
+		puts("Velocidad de coches 1(normal) o 0(rápida).");
 		exit(ERR_ARGS);
 	}
 
 
 	/* Variables de la función main().  */
-	struct sigaction parada, antiguo;  /* Variables para sigaction.  */
 	int i;  /* Variable de iteración.  */
-	pid_t pidHijo;
-	pid_t pidPadre = getpid();  /* PID del padre.  */
+	const pid_t pidPadre = getpid();  /* PID del padre.  */
+	struct sigaction parada, antiguo;  /* Variables para sigaction.  */
 
 
 	/* Valores para la estructura sigaction.  */
@@ -125,37 +128,30 @@ int main(int argc, char const *argv[]) {
 	}
 
 	/* Asociación del puntero a la memoria compartida.  */
-	if ((void *)-1 == (pMemoria = (memoria *)shmat(idMemoria, NULL, 0))) {
-		perror("No se ha podido asignar el puntero");
-		raise(SIGINT);
-	}
+	if ((void *)-1 == (pMemoria = (memoria *)shmat(idMemoria, NULL, 0)))
+		perrorRaise("No se ha podido asignar el puntero");
 
 	/* Inicializamos los valores de la memoria.  */
 	pMemoria->semaforo = -1;
 	pMemoria->buzon = -1;
-	for (i = 0; i < NUM_HIJOS; i++)
-		pMemoria->pid_hijos[i] = -1;
 
-	/* Iniciamos el contador de vueltas.  */
-	pMemoria->vueltasCoches = 0;
+	for (i = 0; i < NUM_HIJOS; i++)  pMemoria->pid_hijos[i] = -1;
+
+	pMemoria->vueltasCoches = 0;  /* Contador de vueltas.  */
 
 
 	/* Inicia y comprueba la creación del array de semáforos.  */
-	if (-1 == (pMemoria->semaforo = semget(IPC_PRIVATE, 5, 0600 | IPC_CREAT))) {
-		perror("No se pudo crear el semaforo");
-		raise(SIGINT);
-	}
+	if (-1 == (pMemoria->semaforo = semget(IPC_PRIVATE, 5, 0600 | IPC_CREAT)))
+		perrorRaise("No se pudo crear el semaforo");
 
 	/* Creación del buzón.  */
-	if (-1 == (pMemoria->buzon = msgget(IPC_PRIVATE, 0600 | IPC_CREAT))) {
-		perror("No se ha podido crear el buzón");
-		raise(SIGINT);
-	}
+	if (-1 == (pMemoria->buzon = msgget(IPC_PRIVATE, 0600 | IPC_CREAT)))
+		perrorRaise("No se ha podido crear el buzón");
 
 	/* Damos valor a los semáforos.  */
 	inicioSemaforo(&(pMemoria->semaforo), SEM_PADRE, 0);
 	inicioSemaforo(&(pMemoria->semaforo), SEM_HIJOS, 0);
-	inicioSemaforo(&(pMemoria->semaforo), SEM_SYNC, 1);
+	inicioSemaforo(&(pMemoria->semaforo), SEM_ATOM, 1);
 	inicioSemaforo(&(pMemoria->semaforo), SEM_MENS, 1);
 
 
@@ -164,18 +160,15 @@ int main(int argc, char const *argv[]) {
 
 
 	/* Iniciamos el circuito.  */
-	if (-1 == inicio_falonso(atoi(argv[2]), pMemoria->semaforo, (char *)pMemoria)) {
-		perror("Error inicio falonso");
-		raise(SIGINT);
-	}
+	if (-1 == inicio_falonso(vel_coches, pMemoria->semaforo, (char *)pMemoria))
+		perrorRaise("Error inicio falonso");
 
 
 	/* Creamos a los hijos/coches.  */
-	for (i = 0; i < atoi(argv[1]); i++) {
-		switch (pidHijo = fork()) {
+	for (i = 0; i < num_coches; i++) {
+		switch (pMemoria->pid_hijos[i] = fork()) {
 			case -1:
-				perror("Error al crear a los hijos");
-				raise(SIGINT);
+				perrorRaise("Error al crear a los hijos");
 			case 0:
 				/* Valores para la estructura sigaction.  */
 				parada.sa_handler = &finHijos;
@@ -184,29 +177,23 @@ int main(int argc, char const *argv[]) {
 				sigfillset(&parada.sa_mask);
 
 				/* Reinicio de la señal SIGINT.  */
-				if (-1 == sigaction(SIGINT, &antiguo, NULL)) {
-					perror("No se ha podido capturar CTRL+C");
-					exit(ERR_SIGN);
-				}
+				if (-1 == sigaction(SIGINT, &antiguo, NULL))
+					perrorRaise("No se ha podido reiniciar CTRL+C");
 
 				/* Comprobación de la captura de la señal SIGUSR1.  */
-				if (-1 == sigaction(SIGUSR1, &parada, NULL)) {
-					perror("No se ha podido capturar CTRL+C");
-					exit(ERR_SIGN);
-				}
+				if (-1 == sigaction(SIGUSR1, &parada, NULL))
+					perrorRaise("No se ha podido capturar CTRL+C");
 
 				/* Acciones del hijo.  */
 				hijo(i);
-			default:
-				pMemoria->pid_hijos[i] = pidHijo;
 		}
 	}
 
 
 	/* Acciones del padre.  */
-	if (getpid() == pidPadre)  padre(atoi(argv[1]));
+	if (getpid() == pidPadre)  padre(num_coches);
 
-
+	raise(SIGINT);
 	exit(0);
 
 }
@@ -221,14 +208,11 @@ void padre(int numHijos)
 	/* Control semáforo (V=1  H=0).  */
 	cerrarCruce(HORIZONTAL);
 
-	if (-1 == luz_semAforo(HORIZONTAL, ROJO)) {
-		perror("Error luz semaforo");
-		raise(SIGINT);
-	}
-	if (-1 == luz_semAforo(VERTICAL, VERDE)) {
-		perror("Error luz semaforo");
-		raise(SIGINT);
-	}
+	if (-1 == luz_semAforo(HORIZONTAL, ROJO))
+		perrorRaise("Error luz semaforo");
+
+	if (-1 == luz_semAforo(VERTICAL, VERDE))
+		perrorRaise("Error luz semaforo");
 
 	/* Pistoletazo hijos.  */
 	opSemaforo(SEM_HIJOS, numHijos);
@@ -237,21 +221,16 @@ void padre(int numHijos)
 	/* Sincronizacion de los semáforos y cambio de color de estos.  */
 	while(1) {
 		/* Control semáforo (V=0  H=1).  */
-		if (-1 == luz_semAforo(VERTICAL, AMARILLO)) {
-			perror("Error luz semaforo");
-			raise(SIGINT);
-		}
+		if (-1 == luz_semAforo(VERTICAL, AMARILLO))
+			perrorRaise("Error luz semaforo");
 
 		cerrarCruce(VERTICAL);
 
-		if (-1 == luz_semAforo(VERTICAL, ROJO)) {
-			perror("Error luz semaforo");
-			raise(SIGINT);
-		}
-		if (-1 == luz_semAforo(HORIZONTAL, VERDE)) {
-			perror("Error luz semaforo");
-			raise(SIGINT);
-		}
+		if (-1 == luz_semAforo(VERTICAL, ROJO))
+			perrorRaise("Error luz semaforo");
+
+		if (-1 == luz_semAforo(HORIZONTAL, VERDE))
+			perrorRaise("Error luz semaforo");
 
 		abrirCruce(HORIZONTAL);
 
@@ -259,21 +238,16 @@ void padre(int numHijos)
 
 
 		/* Control semáforo (V=1  H=0).  */
-		if (-1 == luz_semAforo(HORIZONTAL, AMARILLO)) {
-			perror("Error luz semaforo");
-			raise(SIGINT);
-		}
+		if (-1 == luz_semAforo(HORIZONTAL, AMARILLO))
+			perrorRaise("Error luz semaforo");
 
 		cerrarCruce(HORIZONTAL);
 
-		if (-1 == luz_semAforo(HORIZONTAL, ROJO)) {
-			perror("Error luz semaforo");
-			raise(SIGINT);
-		}
-		if (-1 == luz_semAforo(VERTICAL, VERDE)) {
-			perror("Error luz semaforo");
-			raise(SIGINT);
-		}
+		if (-1 == luz_semAforo(HORIZONTAL, ROJO))
+			perrorRaise("Error luz semaforo");
+
+		if (-1 == luz_semAforo(VERTICAL, VERDE))
+			perrorRaise("Error luz semaforo");
 
 		abrirCruce(VERTICAL);
 
@@ -301,23 +275,17 @@ void hijo(int numHijo)
 
 	/* Configuramos el mensaje de la posición.  */
 	if (carril == CARRIL_DERECHO) {
-		if (!leerMensajeNW(desp)) {
-			perror("Error de reserva de posición");
-			raise(SIGINT);
-		}
+		if (!leerMensajeNW(desp))
+			perrorRaise("Error de reserva de posición");
 	}
 	else if (carril == CARRIL_IZQUIERDO) {
-		if (!leerMensajeNW(137 + desp)) {
-			perror("Error de reserva de posición");
-			raise(SIGINT);
-		}
+		if (!leerMensajeNW(137 + desp))
+			perrorRaise("Error de reserva de posición");
 	}
 
 	/* Iniciamos el coche.  */
-	if (-1 == inicio_coche(&carril, &desp, color)) {
-		perror("Error de creacion del coche");
-		raise(SIGINT);
-	}
+	if (-1 == inicio_coche(&carril, &desp, color))
+		perrorRaise("Error de creacion del coche");
 
 
 	/* Esperamos a que todos los hijos estén creados.  */
@@ -329,7 +297,7 @@ void hijo(int numHijo)
 		velocidad(velo, carril, desp);
 		if (puedoAvanzar(carril, desp)) {
 			/* Inicio parte atómica.  */
-			opSemaforo(SEM_SYNC, -1);
+			opSemaforo(SEM_ATOM, -1);
 			/*----------------------------------------------------------------*/
 			tempC = carril;
 			tempD = desp;
@@ -340,21 +308,21 @@ void hijo(int numHijo)
 			if (((carril == 0) && (desp == 133)) || ((carril == 1) && (desp == 131)))
 				(pMemoria->vueltasCoches)++;
 			/*----------------------------------------------------------------*/
-			opSemaforo(SEM_SYNC, 1);
+			opSemaforo(SEM_ATOM, 1);
 			/* Fin parte atómica.  */
 
 			continue;
 		}
 		else if (puedoCambiarCarril(carril, desp)) {
 			/* Inicio parte atómica.  */
-			opSemaforo(SEM_SYNC, -1);
+			opSemaforo(SEM_ATOM, -1);
 			/*----------------------------------------------------------------*/
 			tempC = carril;
 			tempD = desp;
 			cambio_carril(&carril, &desp, color);
 			liberarPosicion(tempC, tempD);
 			/*----------------------------------------------------------------*/
-			opSemaforo(SEM_SYNC, 1);
+			opSemaforo(SEM_ATOM, 1);
 			/* Fin parte atómica.  */
 
 			continue;
@@ -363,7 +331,7 @@ void hijo(int numHijo)
 
 		cogerPosicion(carril, desp);
 		/* Inicio parte atómica.  */
-		opSemaforo(SEM_SYNC, -1);
+		opSemaforo(SEM_ATOM, -1);
 		/*--------------------------------------------------------------------*/
 		tempC = carril;
 		tempD = desp;
@@ -374,7 +342,7 @@ void hijo(int numHijo)
 		if (((carril == 0) && (desp == 133)) || ((carril == 1) && (desp == 131)))
 			(pMemoria->vueltasCoches)++;
 		/*--------------------------------------------------------------------*/
-		opSemaforo(SEM_SYNC, 1);
+		opSemaforo(SEM_ATOM, 1);
 		/* Fin parte atómica.  */
 	}
 }
@@ -383,20 +351,10 @@ void hijo(int numHijo)
 /* Comprueba si puede avanzar.  */
 int puedoAvanzar(int carril, int desp)
 {
-	if (carril == CARRIL_DERECHO) {
-		if (desp != 136)
-			return leerMensajeNW(desp + 1);
-		else
-			return leerMensajeNW(0);
-	}
-	else if (carril == CARRIL_IZQUIERDO) {
-		if (desp != 136)
-			return leerMensajeNW(137 + desp + 1);
-		else
-			return leerMensajeNW(137);
-	}
-
-	return 1;
+	if (carril == CARRIL_DERECHO)
+		return (desp != 136 ? leerMensajeNW(desp + 1) : leerMensajeNW(0));
+	else
+		return (desp != 136 ? leerMensajeNW(137 + desp + 1) : leerMensajeNW(137));
 }
 
 
@@ -416,10 +374,10 @@ int puedoCambiarCarril(int carril, int desp)
 			return leerMensajeNW(137 + desp - 3);
 		else if (desp == 68)
 			return leerMensajeNW(137 + desp - 4);
-		else if (desp >= 69 && desp <= 129)
+		else
 			return leerMensajeNW(137 + desp - 5);
 	}
-	else if (carril == CARRIL_IZQUIERDO) {
+	else {
 		if (desp >= 16 && desp <= 28)
 			return leerMensajeNW(desp - 1);
 		else if ((desp >= 0 && desp <= 15) || (desp >= 29 && desp <= 58))
@@ -434,29 +392,19 @@ int puedoCambiarCarril(int carril, int desp)
 			return leerMensajeNW(desp + 4);
 		else if (desp >= 65 && desp <= 125)
 			return leerMensajeNW(desp + 5);
-		else if (desp >= 134 && desp <= 136)
+		else
 			return leerMensajeNW(136);
 	}
-
-	return 1;
 }
 
 
 /* Mira la posición que tiene delante y lee el mensaje cuando haya.  */
 void cogerPosicion(int carril, int desp)
 {
-	if (carril == CARRIL_DERECHO) {
-		if (desp != 136)
-			leerMensaje(desp + 1);
-		else
-			leerMensaje(0);
-	}
-	else if (carril == CARRIL_IZQUIERDO) {
-		if (desp != 136)
-			leerMensaje(137 + desp + 1);
-		else
-			leerMensaje(137);
-	}
+	if (carril == CARRIL_DERECHO)
+		desp != 136 ? leerMensaje(desp + 1) : leerMensaje(0);
+	else
+		desp != 136 ? leerMensaje(137 + desp + 1) : leerMensaje(137);
 }
 
 
@@ -465,7 +413,7 @@ void liberarPosicion(int carril, int desp)
 {
 	if (carril == CARRIL_DERECHO)
 		enviarMensaje(desp);
-	else if (carril == CARRIL_IZQUIERDO)
+	else
 		enviarMensaje(137 + desp);
 }
 
@@ -483,7 +431,8 @@ void abrirCruce(int dirCruce)
 		enviarMensaje(137 + 24);
 		enviarMensaje(23);
 		enviarMensaje(137 + 25);
-	} else if (dirCruce == HORIZONTAL) {
+	}
+	else {
 		enviarMensaje(106);
 		enviarMensaje(137 + 99);
 		enviarMensaje(107);
@@ -507,7 +456,8 @@ void cerrarCruce(int dirCruce)
 		leerMensaje(137 + 24);
 		leerMensaje(23);
 		leerMensaje(137 + 25);
-	} else if (dirCruce == HORIZONTAL) {
+	}
+	else {
 		leerMensaje(106);
 		leerMensaje(137 + 99);
 		leerMensaje(107);
@@ -529,10 +479,8 @@ void inicioSemaforo(int *semaforo, int nSemaforo, int val)
 	} semf;
 
 	semf.val = val;
-	if (-1 == semctl(*semaforo, nSemaforo, SETVAL, semf)) {
-		perror("No se ha podido establecer el valor del semáforo");
-		raise(SIGINT);
-	}
+	if (-1 == semctl(*semaforo, nSemaforo, SETVAL, semf))
+		perrorRaise("No se ha podido establecer el valor del semáforo");
 }
 
 
@@ -548,10 +496,8 @@ void opSemaforo(int nSemaforo, int nSignal)
 	opSem.sem_flg = 0;
 
 	/* Ejecutamos la operación del semáforo.  */
-	if (-1 == semop(pMemoria->semaforo, &opSem, 1)) {
-		perror("Error al hacer Signal");
-		raise(SIGINT);
-	}
+	if (-1 == semop(pMemoria->semaforo, &opSem, 1))
+		perrorRaise("Error al hacer Signal");
 }
 
 
@@ -563,10 +509,9 @@ void enviarMensaje(long tipo)
 
 	opSemaforo(SEM_MENS, -1);
 	men.tipo = tipo + 1;  /* +1 por la lógica de los buzones.  */
-	if (-1 == msgsnd(pMemoria->buzon, &men, sizeof(men.info), 0)) {
-		perror("Error al enviar mensaje");
-		raise(SIGINT);
-	}
+	if (-1 == msgsnd(pMemoria->buzon, &men, sizeof(men.info), 0))
+		perrorRaise("Error al enviar mensaje");
+
 	opSemaforo(SEM_MENS, 1);
 }
 
@@ -576,10 +521,8 @@ void leerMensaje(long tipo)
 {
 	mensaje men;
 
-	if (-1 == msgrcv(pMemoria->buzon, &men, sizeof(men.info), tipo + 1, 0)) {
-		perror("Error al leer mensaje");
-		raise(SIGINT);
-	}
+	if (-1 == msgrcv(pMemoria->buzon, &men, sizeof(men.info), tipo + 1, 0))
+		perrorRaise("Error al leer mensaje");
 }
 
 
@@ -638,4 +581,12 @@ void finPadre(int seNial)
 void finHijos(int seNial)
 {
 	exit(0);
+}
+
+
+/* Ejecuta las funciones perror() y raise(SIGINT).  */
+void perrorRaise(char * sError)
+{
+	perror(sError);
+	raise(SIGINT);
 }
