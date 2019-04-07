@@ -50,8 +50,7 @@ void leerMensaje(long tipo);
 int leerMensajeNW(long tipo);
 
 /* Funciones de las manejadoras.  */
-void finPadre(int seNial);
-void finHijos(int seNial);
+void finProg(int seNial);
 void perrorRaise(char * sError);
 
 
@@ -110,7 +109,7 @@ int main(int argc, const char *argv[]) {
 
 
 	/* Valores para la estructura sigaction.  */
-	parada.sa_handler = &finPadre;
+	parada.sa_handler = &finProg;
 	parada.sa_flags = SA_RESTART;
 	sigfillset(&parada.sa_mask);
 
@@ -171,7 +170,7 @@ int main(int argc, const char *argv[]) {
 				perrorRaise("Error al crear a los hijos");
 			case 0:
 				/* Valores para la estructura sigaction.  */
-				parada.sa_handler = &finHijos;
+				parada.sa_handler = &finProg;
 				parada.sa_flags = SA_RESTART;
 				sigemptyset(&parada.sa_mask);  /* Reinicio de la máscara.  */
 				sigfillset(&parada.sa_mask);
@@ -539,47 +538,41 @@ int leerMensajeNW(long tipo)
 
 
 /* Función de la manejadora de la señal CTRL + C.  */
-void finPadre(int seNial)
+void finProg(int seNial)
 {
-	/* Eliminamos los hijos y esperamos a que terminen.  */
-	int i;
-	for (i = 0; i < NUM_HIJOS; i++) {
-		if (pMemoria->pid_hijos[i] != -1) {
-			kill(pMemoria->pid_hijos[i], SIGUSR1);
-			wait(0);
+	if (seNial == SIGINT) {
+		/* Eliminamos los hijos y esperamos a que terminen.  */
+		int i;
+		for (i = 0; i < NUM_HIJOS; i++) {
+			if (pMemoria->pid_hijos[i] != -1) {
+				kill(pMemoria->pid_hijos[i], SIGUSR1);
+				wait(0);
+			}
 		}
+
+
+		/* Pasamos las vueltas a la función fin_falonso().  */
+		fin_falonso(&(pMemoria->vueltasCoches));
+
+
+		/* Eliminamos los recursos IPC.  */
+		if (pMemoria->semaforo != -1)
+			if (semctl(pMemoria->semaforo, 0, IPC_RMID) == -1)
+				perror("Error en el borrado de los semáforos");
+
+		if (pMemoria->buzon != -1)
+			if (msgctl(pMemoria->buzon, IPC_RMID, NULL) == -1)
+				perror("Error en borrado de buzón");
+
+		if ((pMemoria != NULL) || (pMemoria != (void *)-1))
+			if (shmdt((void *)pMemoria) == -1)
+				perror("No se ha podido eliminar el puntero de memoria");
+
+		if (idMemoria != -1)
+			if (shmctl(idMemoria, IPC_RMID, NULL) == -1)
+				perror("No se ha podido liberar la memoria");
 	}
 
-
-	/* Pasamos las vueltas a la función fin_falonso().  */
-	fin_falonso(&(pMemoria->vueltasCoches));
-
-
-	/* Eliminamos los recursos IPC.  */
-	if (pMemoria->semaforo != -1)
-		if (semctl(pMemoria->semaforo, 0, IPC_RMID) == -1)
-			perror("Error en el borrado de los semáforos");
-
-	if (pMemoria->buzon != -1)
-		if (msgctl(pMemoria->buzon, IPC_RMID, NULL) == -1)
-			perror("Error en borrado de buzón");
-
-	if ((pMemoria != NULL) || (pMemoria != (void *)-1))
-		if (shmdt((void *)pMemoria) == -1)
-			perror("No se ha podido eliminar el puntero de memoria");
-
-	if (idMemoria != -1)
-		if (shmctl(idMemoria, IPC_RMID, NULL) == -1)
-			perror("No se ha podido liberar la memoria");
-
-
-	exit(0);
-}
-
-
-/* Función de la manejadora para los hijos.  */
-void finHijos(int seNial)
-{
 	exit(0);
 }
 
