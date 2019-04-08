@@ -271,6 +271,7 @@ void hijo(int numHijo)
 	int color = rand() % 8;  /* Color del coche.  */
 	int velo = 1 + (rand() % 99);  /* Velocidad del coche.  */
 	int tempC, tempD;  /* Variables temporales para el cambio de posición.  */
+	int cambio = 0;  /* Flag para indicar si se ha cambiado de carril.  */
 
 	/* Si calcula un color azul lo cambia a otro.  */
 	if (4 == color)  color ++;
@@ -313,10 +314,11 @@ void hijo(int numHijo)
 			/*----------------------------------------------------------------*/
 			opSemaforo(SEM_ATOM, 1);
 			/* Fin parte atómica.  */
+			cambio = 0;
 
 			continue;
 		}
-		else if (puedoCambiarCarril(carril, desp)) {
+		else if ((cambio < 2) && puedoCambiarCarril(carril, desp)) {
 			/* Inicio parte atómica.  */
 			opSemaforo(SEM_ATOM, -1);
 			/*----------------------------------------------------------------*/
@@ -327,6 +329,7 @@ void hijo(int numHijo)
 			/*----------------------------------------------------------------*/
 			opSemaforo(SEM_ATOM, 1);
 			/* Fin parte atómica.  */
+			cambio++;
 
 			continue;
 		}
@@ -347,6 +350,8 @@ void hijo(int numHijo)
 		/*--------------------------------------------------------------------*/
 		opSemaforo(SEM_ATOM, 1);
 		/* Fin parte atómica.  */
+
+		cambio = 0;
 	}
 }
 
