@@ -1,3 +1,7 @@
+/*
+ * PROGRAMA FALONSO.C
+ * Autores: Carlos Manjón García y Miguel Sánchez González  08-APR-2019.
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -113,9 +117,9 @@ int main(int argc, const char *argv[]) {
 	parada.sa_flags = SA_RESTART;
 	sigfillset(&parada.sa_mask);
 
-	/* Comprobación de la captura de la señal SIGINT.  */
+	/* Comprobación de la captura de la señal CTRL + C.  */
 	if (-1 == sigaction(SIGINT, &parada, &antiguo)) {
-		perror("No se ha podido capturar CTRL+C");
+		perror("No se ha podido capturar CTRL + C");
 		exit(ERR_SIGN);
 	}
 
@@ -537,7 +541,7 @@ int leerMensajeNW(long tipo)
 }
 
 
-/* Función de la manejadora de la señal CTRL + C.  */
+/* Función de la manejadora de las señales.  */
 void finProg(int seNial)
 {
 	if (seNial == SIGINT) {
