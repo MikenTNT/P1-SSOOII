@@ -88,21 +88,23 @@ memoria *pMemoria = NULL;  /* Puntero de la memoria.  */
 
 int main(int argc, const char *argv[]) {
 
-	const int num_coches = atoi(argv[1]);  /* Número de hijos.  */
-	const int vel_coches = atoi(argv[2]);  /* Velocidad de los coches.  */
-
 	/* Comprobación de los argumentos.  */
 	if (argc != 3) {
 		puts("Modo de uso, \"./falonso (numero de coches) (velocidad 0/1)\".");
 		exit(ERR_ARGS);
 	}
-	else if ((num_coches <= 0) && (num_coches > NUM_HIJOS)) {
-		printf("Número de coches erróneo (max. %d).", NUM_HIJOS);
-		exit(ERR_ARGS);
-	}
-	else if ((vel_coches != 0) && (vel_coches != 1)) {
-		puts("Velocidad de coches 1(normal) o 0(rápida).");
-		exit(ERR_ARGS);
+	else {
+		const int num_coches = atoi(argv[1]);  /* Número de hijos.  */
+		const int vel_coches = atoi(argv[2]);  /* Velocidad de los coches.  */
+
+		if ((num_coches <= 0) && (num_coches > NUM_HIJOS)) {
+			printf("Número de coches erróneo (max. %d).", NUM_HIJOS);
+			exit(ERR_ARGS);
+		}
+		else if ((vel_coches != 0) && (vel_coches != 1)) {
+			puts("Velocidad de coches 1(normal) o 0(rápida).");
+			exit(ERR_ARGS);
+		}
 	}
 
 
@@ -427,8 +429,7 @@ void liberarPosicion(int carril, int desp)
 
 
 /*
- * Manda un mensaje al buzón con las posiciones del cruce
- *  para permitir el paso.
+ * Manda un mensaje al buzón con las posiciones del cruce para permitir el paso.
  */
 void abrirCruce(int dirCruce)
 {
@@ -452,8 +453,7 @@ void abrirCruce(int dirCruce)
 
 
 /*
- * Manda un mensaje al buzón con las posiciones del cruce
- *  para bloquear el paso.
+ * Manda un mensaje al buzón con las posiciones del cruce para bloquear el paso.
  */
 void cerrarCruce(int dirCruce)
 {
